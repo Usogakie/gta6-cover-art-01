@@ -50,7 +50,7 @@ let dragging = null; // {x, y} pointer position while panning on the canvas
 
 /** Resizes the canvas to the chosen export size and repaints the cover. */
 export function redraw() {
-  const [w, h] = SIZES[state.size];
+  const [w, h] = SIZES[state.size] ?? SIZES['1080x1080'];
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
@@ -92,6 +92,9 @@ async function loadFileIntoSlot(file, slot) {
     redraw();
   } catch {
     status.textContent = 'That file could not be read as a photo.';
+  } finally {
+    // The image is decoded by now (or failed to load); the blob URL can go.
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -216,6 +219,7 @@ canvas.addEventListener('wheel', (e) => {
 
 // Export: download the canvas as a PNG at the chosen post size.
 document.getElementById('export').addEventListener('click', () => {
+  status.textContent = 'Exporting…';
   canvas.toBlob((blob) => {
     if (!blob) {
       status.textContent = 'Export failed — please try again.';

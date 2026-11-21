@@ -71,8 +71,9 @@ export function layoutPanels(layout, w, h) {
 /** Draws one photo into a panel rect, cover-fit, with the panel's pan/zoom. */
 function drawPanelPhoto(ctx, photo, rect, view) {
   const [x, y, w, h] = rect;
-  if (!photo) {
-    // Empty slot: a dusk gradient with a faint sun, so the cover still reads.
+  if (!photo || !photo.naturalWidth || !photo.naturalHeight) {
+    // Empty slot (or an image with no pixels yet): a dusk gradient with a
+    // faint sun, so the cover still reads.
     const sky = ctx.createLinearGradient(x, y, x, y + h);
     sky.addColorStop(0, '#3b1d5e');
     sky.addColorStop(0.55, '#c94b7c');
