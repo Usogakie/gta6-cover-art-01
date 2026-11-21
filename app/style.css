@@ -1,57 +1,52 @@
-/* Vice Cover Studio — editor chrome. Dark Vice purple, neon accents, and a
-   live preview that always shows the cover at its true export proportions. */
-html, body {
+* { box-sizing: border-box; }
+body {
   margin: 0;
-  min-height: 100%;
   background: #170a24;
   color: #f4eefb;
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .app {
   display: flex;
+  flex-direction: row;
   gap: 28px;
-  align-items: flex-start;
-  justify-content: center;
   padding: 24px;
-  box-sizing: border-box;
   min-height: 100vh;
+  justify-content: center;
 }
 .controls {
+  width: 320px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 320px;
-  flex: none;
 }
-.controls h1 {
-  margin: 0;
+h1 {
   font-size: 30px;
-  line-height: 1.05;
-  letter-spacing: -0.5px;
-  color: #fff;
   text-transform: uppercase;
-  font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
-}
-.tagline { margin: 0; color: #c9b8e0; }
-fieldset {
+  font-family: "Arial Black", Arial, sans-serif;
+  color: #fff;
   margin: 0;
-  padding: 14px;
+  line-height: 1.1;
+}
+.tagline { color: #c9b8e0; margin: 0; }
+fieldset {
   border: 1px solid #4a2b6e;
   border-radius: 10px;
   background: #201233;
+  padding: 14px;
+  margin: 0;
 }
 legend {
-  padding: 0 6px;
-  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   font-size: 12px;
+  letter-spacing: 0.08em;
   color: #ff8ad8;
+  font-weight: bold;
+  padding: 0 6px;
 }
 label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -59,74 +54,76 @@ label.check {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
-input[type=text], select {
-  font: inherit;
-  padding: 8px 10px;
+input[type="text"], select {
+  background: #170a24;
   border: 1px solid #5b3a80;
   border-radius: 6px;
-  background: #170a24;
   color: #fff;
-}
-input[type=file] { font: inherit; color: #c9b8e0; }
-input[type=range] { width: 100%; accent-color: #ff5c39; }
-.hint { margin: 2px 0 0; color: #a48fc4; font-size: 13px; }
-.row { display: flex; gap: 8px; margin: 4px 0 10px; }
-.button-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.button-group:last-child { margin-bottom: 0; }
-button {
+  padding: 8px 10px;
   font: inherit;
+  margin-top: 4px;
+}
+input[type="file"] { margin-top: 4px; font-weight: 400; }
+input[type="range"] { width: 100%; accent-color: #ff5c39; margin-top: 4px; }
+.hint { font-size: 13px; color: #a48fc4; margin: 4px 0 0; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+.group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+button {
+  background: #2c1846;
+  border: 1px solid #5b3a80;
+  border-radius: 6px;
+  color: #f4eefb;
   font-weight: 600;
   padding: 8px 12px;
-  border: 1px solid #5b3a80;
-  border-radius: 6px;
-  background: #2c1846;
-  color: #f4eefb;
   cursor: pointer;
+  font: inherit;
 }
 button:hover { border-color: #ff8ad8; }
 button.active { background: #ff5c39; border-color: #ff5c39; color: #fff; }
-.swatches { display: flex; gap: 8px; margin-top: 10px; }
-.swatch {
+.swatches { display: flex; gap: 8px; margin-bottom: 10px; }
+.swatches button {
   flex: 1;
-  padding: 6px 4px;
   color: #170a24;
   border: 2px solid transparent;
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.7);
 }
-.swatch.active { border-color: #fff; box-shadow: 0 0 0 2px #ff5c39; }
+.swatches button.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #ff5c39;
+  background: inherit;
+}
 .export {
   padding: 14px;
   font-size: 17px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   background: linear-gradient(90deg, #ff5c39, #ff2e88);
-  border: 0;
+  border: none;
   color: #fff;
 }
-.export:hover { filter: brightness(1.1); }
-#status { margin: 0; color: #a48fc4; min-height: 1.4em; }
+.export:hover { filter: brightness(1.15); border: none; }
+#status { color: #a48fc4; min-height: 1.4em; margin: 0; }
 .preview {
   flex: 1;
+  position: sticky;
+  top: 24px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  position: sticky;
-  top: 24px;
+  align-self: flex-start;
 }
-.preview canvas {
+canvas {
   width: min(78vh, 62vw);
   height: auto;
   max-height: calc(100vh - 48px);
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
   cursor: grab;
   touch-action: none;
+  display: block;
 }
-.preview canvas:active { cursor: grabbing; }
-/* Screenshot scene: the cover alone fills the viewport. */
+canvas:active { cursor: grabbing; }
 body.shot-cover .controls { display: none; }
 body.shot-cover .app { padding: 0; gap: 0; }
 body.shot-cover .preview { position: static; }
@@ -138,8 +135,8 @@ body.shot-cover canvas {
   object-fit: fill;
 }
 @media (max-width: 900px) {
-  .app { flex-direction: column; align-items: stretch; }
+  .app { flex-direction: column; }
   .controls { width: auto; }
   .preview { position: static; }
-  .preview canvas { width: 100%; max-height: none; }
+  .preview canvas { width: 100%; }
 }
