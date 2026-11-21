@@ -1,70 +1,88 @@
-// A tiny static server for app/ (Node 22, standard library only), so the
-// entry can be tried locally without a build step: `node serve.ts` serves
-// app/ on http://localhost:8080 (or --port <n>). It sends the MIME types an
-// offline web app needs, refuses any path outside app/, and otherwise does
-// nothing clever: a development convenience, not a server for the internet.
-import { createReadStream, statSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// serve.ts — tiny static server for app/ (Node 22, standard library only).
+// Serves on http://localhost:8080 by default, or --port <n>.
 
-const root = resolve(fileURLToPath(new URL('./app', import.meta.url)));
-const args = process.argv.slice(2);
-const portIndex = args.indexOf('--port');
-const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
-const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, normalize, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const MIME: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
-  '.ttf': 'font/ttf',
-  '.otf': 'font/otf',
-  '.wasm': 'application/wasm',
-  '.txt': 'text/plain; charset=utf-8',
+const here = fileURLToPath(new URL(".", import.meta.url));
+const root = resolve(join(here, "app"));
+
+let port = 8080;
+const portArg = process.argv.indexOf("--port");
+if (portArg !== -1) {
+  const n = Number.parseInt(process.argv[portArg + 1], 10);
+  if (Number.isInteger(n) && n >= 1 && n <= 65535) port = n;
+}
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain; charset=utf-8",
 };
 
-createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname: string;
+const server = createServer(async (req, res) => {
   try {
-    pathname = decodeURIComponent(url.pathname);
+    const rawPath = (req.url || "/").split("?")[0];
+    let decoded;
+    try {
+      decoded = decodeURIComponent(rawPath);
+    } catch {
+      res.writeHead(400, { "content-type": "text/plain" });
+      res.end("Bad request");
+      return;
+    }
+    let rel = decoded;
+    if (rel.endsWith("/")) rel += "index.html";
+    const target = resolve(join(root, normalize(rel)));
+    if (target !== root && !target.startsWith(root + sep)) {
+      res.writeHead(403, { "content-type": "text/plain" });
+      res.end("Forbidden");
+      return;
+    }
+    let info;
+    try {
+      info = await stat(target);
+    } catch {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("Not found");
+      return;
+    }
+    if (!info.isFile()) {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("Not found");
+      return;
+    }
+    const body = await readFile(target);
+    const type = MIME[extname(target).toLowerCase()] || "application/octet-stream";
+    res.writeHead(200, {
+      "content-type": type,
+      "content-length": body.length,
+      "cache-control": "no-store",
+    });
+    res.end(body);
   } catch {
-    response.writeHead(400).end('bad request');
-    return;
+    res.writeHead(500, { "content-type": "text/plain" });
+    res.end("Server error");
   }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    response.writeHead(403).end('forbidden');
-    return;
-  }
-  let size: number;
-  try {
-    const stats = statSync(file);
-    if (!stats.isFile()) throw new Error('not a file');
-    size = stats.size;
-  } catch {
-    response.writeHead(404).end('not found');
-    return;
-  }
-  response.writeHead(200, {
-    'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': size,
-    'cache-control': 'no-store',
-  });
-  createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`app/ is on http://localhost:${port}`);
+});
+
+server.listen(port, "127.0.0.1", () => {
+  console.log(`Listening on http://localhost:${port}`);
 });
