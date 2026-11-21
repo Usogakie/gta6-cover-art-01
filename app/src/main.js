@@ -1,259 +1,305 @@
-// Vice Cover Studio — editor wiring.
-//
-// Owns the page state, binds every control to it, redraws the live preview
-// canvas on each change, and exports the cover as a PNG at the chosen post
-// size. Photos are read on the user's own machine with FileReader and are
-// never uploaded anywhere. A `?shot=` query sets up a fixed scene for a
-// screenshot instead (see shots.js).
-import { SIZES, LAYOUTS, LAYOUT_LABELS, drawCover } from './cover.js';
-import { runShot } from './shots.js';
+// main.js — editor wiring for Vice Cover Studio.
 
-const canvas = document.getElementById('cover');
-const status = document.getElementById('status');
-const captionInput = document.getElementById('caption');
-const subInput = document.getElementById('subcaption');
-const sizeButtons = document.querySelector('[data-group="size"]');
-const layoutButtons = document.querySelector('[data-group="layout"]');
-const fillToggle = document.getElementById('fill-one');
-const gradeSlider = document.getElementById('grade');
-const grainToggle = document.getElementById('grain');
-const frameToggle = document.getElementById('frame');
-const zoomSlider = document.getElementById('zoom');
-const panXSlider = document.getElementById('panx');
-const panYSlider = document.getElementById('pany');
-const activePanel = document.getElementById('active-panel');
-const inkSwatches = document.querySelector('[data-group="ink"]');
-const accentSwatches = document.querySelector('[data-group="accent"]');
+import { SIZES, LAYOUTS, LAYOUT_LABELS, drawCover } from "./cover.js";
+import { runShot } from "./shots.js";
 
-/** The live editor state; drawCover reads exactly this shape. */
 export const state = {
-  size: '1080x1080',
-  layout: 'hero',
+  size: "1080x1080",
+  layout: "hero",
   photos: [null, null, null],
-  fill: 'one',
+  fill: "one",
   view: [
     { zoom: 1, px: 0, py: 0 },
     { zoom: 1, px: 0, py: 0 },
     { zoom: 1, px: 0, py: 0 },
   ],
-  caption: 'Vice Nights',
-  subcaption: 'Welcome to Leonida',
-  ink: '#ffffff',
-  accent: '#ff5c39',
+  caption: "Vice Nights",
+  subcaption: "Welcome to Leonida",
+  ink: "#ffffff",
+  accent: "#ff5c39",
   grade: 0.7,
   grain: true,
   frame: true,
 };
 
-let activeSlot = 0; // which photo slot the zoom/pan sliders adjust
-let dragging = null; // {x, y} pointer position while panning on the canvas
+let activeSlot = 0;
 
-/** Resizes the canvas to the chosen export size and repaints the cover. */
-export function redraw() {
-  const [w, h] = SIZES[state.size] ?? SIZES['1080x1080'];
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-  drawCover(canvas, state);
-  const slot = state.view[activeSlot];
-  zoomSlider.value = String(slot.zoom);
-  panXSlider.value = String(slot.px);
-  panYSlider.value = String(slot.py);
+const canvas = document.getElementById("cover");
+const statusEl = document.getElementById("status");
+const captionInput = document.getElementById("caption");
+const subInput = document.getElementById("subcaption");
+const fillOne = document.getElementById("fill-one");
+const sizeNote = document.getElementById("size-note");
+const gradeInput = document.getElementById("grade");
+const gradeNote = document.getElementById("grade-note");
+const grainInput = document.getElementById("grain");
+const frameInput = document.getElementById("frame");
+const activePanel = document.getElementById("active-panel");
+const zoomInput = document.getElementById("zoom");
+const panxInput = document.getElementById("panx");
+const panyInput = document.getElementById("pany");
+const exportBtn = document.getElementById("export");
+
+function setStatus(text) {
+  statusEl.textContent = text;
 }
 
-/** Marks one button in a group active and clears the rest. */
+export function redraw() {
+  const [w, h] = SIZES[state.size];
+  canvas.width = w;
+  canvas.height = h;
+  drawCover(canvas, state);
+  const view = state.view[activeSlot];
+  zoomInput.value = String(view.zoom);
+  panxInput.value = String(view.px);
+  panyInput.value = String(view.py);
+}
+
 function markActive(group, value) {
-  group.querySelectorAll('button').forEach((b) => {
-    const on = b.dataset.value === value;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-pressed', String(on));
+  const container = document.querySelector(`[data-group="${group}"]`);
+  if (!container) return;
+  container.querySelectorAll("button").forEach((btn) => {
+    const v = btn.dataset.size || btn.dataset.layout || btn.dataset.value;
+    const on = v === value;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
   });
 }
 
-/** Loads an image from a URL, resolving once it can be drawn. */
-export function loadImage(url) {
+function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = () => reject(new Error("Could not load image"));
     img.src = url;
   });
 }
 
-/** Reads a user-picked file into the given photo slot. */
 async function loadFileIntoSlot(file, slot) {
-  if (!file) return;
   const url = URL.createObjectURL(file);
   try {
-    state.photos[slot] = await loadImage(url);
+    const img = await loadImage(url);
+    state.photos[slot] = img;
     state.view[slot] = { zoom: 1, px: 0, py: 0 };
-    status.textContent = `Photo ${slot + 1} loaded — drag it on the cover to position it.`;
+    setStatus(`Photo ${slot + 1} loaded.`);
     redraw();
   } catch {
-    status.textContent = 'That file could not be read as a photo.';
+    setStatus("That file could not be read as a photo — please try another.");
   } finally {
-    // The image is decoded by now (or failed to load); the blob URL can go.
     URL.revokeObjectURL(url);
   }
 }
 
-/** Loads one of the bundled sample photos into a slot. */
 async function loadSample(name, slot) {
   try {
-    state.photos[slot] = await loadImage(`samples/${name}.jpg`);
+    const img = await loadImage(`samples/${name}.jpg`);
+    state.photos[slot] = img;
     state.view[slot] = { zoom: 1, px: 0, py: 0 };
     redraw();
+    return true;
   } catch {
-    status.textContent = `Sample photo ${name} could not be loaded.`;
+    setStatus("Sample photo could not be loaded.");
+    return false;
   }
 }
 
-// Photo slots: file pickers, sample buttons, and the active-slot picker.
-document.querySelectorAll('[data-photo-slot]').forEach((input) => {
-  input.addEventListener('change', (e) => {
-    loadFileIntoSlot(e.target.files[0], Number(input.dataset.photoSlot));
+// Build layout buttons from LAYOUTS / LAYOUT_LABELS.
+const layoutGroup = document.querySelector('[data-group="layout"]');
+LAYOUTS.forEach((layout) => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.dataset.layout = layout;
+  btn.textContent = LAYOUT_LABELS[layout];
+  btn.setAttribute("aria-pressed", String(layout === state.layout));
+  if (layout === state.layout) btn.classList.add("active");
+  btn.addEventListener("click", () => {
+    state.layout = layout;
+    markActive("layout", layout);
+    redraw();
+  });
+  layoutGroup.appendChild(btn);
+});
+
+// File inputs.
+document.querySelectorAll("input[data-photo-slot]").forEach((input) => {
+  input.addEventListener("change", () => {
+    const slot = Number(input.dataset.photoSlot);
+    const file = input.files && input.files[0];
+    if (file) loadFileIntoSlot(file, slot);
   });
 });
-document.querySelectorAll('[data-sample]').forEach((button) => {
-  button.addEventListener('click', () => {
-    loadSample(button.dataset.sample, Number(button.dataset.sampleSlot || 0));
-    status.textContent = `Sample “${button.dataset.sample}” loaded into photo 1.`;
+
+// Sample buttons.
+document.querySelectorAll("[data-sample]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const name = btn.dataset.sample;
+    const slot = Number(btn.dataset.slot || 0);
+    const ok = await loadSample(name, slot);
+    if (ok) setStatus(`Sample “${name}” loaded into photo 1.`);
   });
 });
-activePanel.addEventListener('change', () => {
+
+// Active panel select.
+activePanel.addEventListener("change", () => {
   activeSlot = Number(activePanel.value);
   redraw();
 });
 
-// Size and layout pickers.
-sizeButtons.addEventListener('click', (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  state.size = button.dataset.value;
-  markActive(sizeButtons, state.size);
-  document.getElementById('size-note').textContent = `Exporting ${state.size.replace('x', ' × ')} px.`;
-  redraw();
+// Size buttons.
+document.querySelectorAll('[data-group="size"] button').forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.size = btn.dataset.size;
+    const [w, h] = SIZES[state.size];
+    sizeNote.textContent = `Exporting ${w} × ${h} px.`;
+    markActive("size", state.size);
+    redraw();
+  });
 });
-layoutButtons.addEventListener('click', (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  state.layout = button.dataset.value;
-  markActive(layoutButtons, state.layout);
-  redraw();
-});
-LAYOUTS.forEach((layout) => {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.dataset.value = layout;
-  button.textContent = LAYOUT_LABELS[layout];
-  layoutButtons.appendChild(button);
-});
-markActive(layoutButtons, state.layout);
-markActive(sizeButtons, state.size);
 
-// Caption text, colours, grade and finish toggles.
-captionInput.addEventListener('input', () => { state.caption = captionInput.value; redraw(); });
-subInput.addEventListener('input', () => { state.subcaption = subInput.value; redraw(); });
-fillToggle.addEventListener('change', () => {
-  state.fill = fillToggle.checked ? 'one' : 'each';
-  status.textContent = fillToggle.checked
-    ? 'One photo fills every panel.'
-    : 'Each panel uses its own photo.';
+// Caption inputs.
+captionInput.addEventListener("input", () => {
+  state.caption = captionInput.value;
   redraw();
 });
-gradeSlider.addEventListener('input', () => {
-  state.grade = Number(gradeSlider.value);
-  document.getElementById('grade-note').textContent = `${Math.round(state.grade * 100)}% sunset`;
-  redraw();
-});
-grainToggle.addEventListener('change', () => { state.grain = grainToggle.checked; redraw(); });
-frameToggle.addEventListener('change', () => { state.frame = frameToggle.checked; redraw(); });
-inkSwatches.addEventListener('click', (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  state.ink = button.dataset.value;
-  markActive(inkSwatches, state.ink);
-  redraw();
-});
-accentSwatches.addEventListener('click', (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  state.accent = button.dataset.value;
-  markActive(accentSwatches, state.accent);
+subInput.addEventListener("input", () => {
+  state.subcaption = subInput.value;
   redraw();
 });
 
-// Zoom and pan sliders adjust the active photo slot.
-zoomSlider.addEventListener('input', () => { state.view[activeSlot].zoom = Number(zoomSlider.value); redraw(); });
-panXSlider.addEventListener('input', () => { state.view[activeSlot].px = Number(panXSlider.value); redraw(); });
-panYSlider.addEventListener('input', () => { state.view[activeSlot].py = Number(panYSlider.value); redraw(); });
-
-// Drag on the preview to pan the active photo inside its panel.
-function pointerPos(e) {
-  const rect = canvas.getBoundingClientRect();
-  return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
-}
-canvas.addEventListener('pointerdown', (e) => {
-  dragging = pointerPos(e);
-  canvas.setPointerCapture(e.pointerId);
+// Fill checkbox.
+fillOne.addEventListener("change", () => {
+  state.fill = fillOne.checked ? "one" : "each";
+  setStatus(
+    fillOne.checked
+      ? "One photo fills every panel."
+      : "Each panel uses its own photo.",
+  );
+  redraw();
 });
-canvas.addEventListener('pointermove', (e) => {
+
+// Grade slider.
+gradeInput.addEventListener("input", () => {
+  state.grade = Number(gradeInput.value);
+  gradeNote.textContent = `${Math.round(state.grade * 100)}% sunset`;
+  redraw();
+});
+
+// Grain / frame checkboxes.
+grainInput.addEventListener("change", () => {
+  state.grain = grainInput.checked;
+  redraw();
+});
+frameInput.addEventListener("change", () => {
+  state.frame = frameInput.checked;
+  redraw();
+});
+
+// Ink / accent swatch groups (click delegation).
+document.querySelectorAll('[data-group="ink"], [data-group="accent"]').forEach((group) => {
+  group.addEventListener("click", (event) => {
+    const btn = event.target.closest("button");
+    if (!btn) return;
+    const value = btn.dataset.value;
+    if (group.dataset.group === "ink") state.ink = value;
+    else state.accent = value;
+    markActive(group.dataset.group, value);
+    redraw();
+  });
+});
+
+// Zoom / pan sliders.
+zoomInput.addEventListener("input", () => {
+  state.view[activeSlot].zoom = Number(zoomInput.value);
+  redraw();
+});
+panxInput.addEventListener("input", () => {
+  state.view[activeSlot].px = Number(panxInput.value);
+  redraw();
+});
+panyInput.addEventListener("input", () => {
+  state.view[activeSlot].py = Number(panyInput.value);
+  redraw();
+});
+
+// Canvas pointer drag to pan, wheel to zoom.
+let dragging = false;
+let lastX = 0;
+let lastY = 0;
+canvas.addEventListener("pointerdown", (event) => {
+  dragging = true;
+  lastX = event.clientX;
+  lastY = event.clientY;
+  canvas.setPointerCapture(event.pointerId);
+});
+canvas.addEventListener("pointermove", (event) => {
   if (!dragging) return;
-  const pos = pointerPos(e);
+  const rect = canvas.getBoundingClientRect();
   const view = state.view[activeSlot];
-  view.px += pos.x - dragging.x;
-  view.py += pos.y - dragging.y;
-  view.px = Math.max(-0.6, Math.min(0.6, view.px));
-  view.py = Math.max(-0.6, Math.min(0.6, view.py));
-  dragging = pos;
+  view.px = Math.max(-0.6, Math.min(0.6, view.px + (event.clientX - lastX) / rect.width));
+  view.py = Math.max(-0.6, Math.min(0.6, view.py + (event.clientY - lastY) / rect.height));
+  lastX = event.clientX;
+  lastY = event.clientY;
   redraw();
 });
-canvas.addEventListener('pointerup', () => { dragging = null; });
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const view = state.view[activeSlot];
-  view.zoom = Math.max(1, Math.min(3, view.zoom * (e.deltaY < 0 ? 1.08 : 0.93)));
-  redraw();
-}, { passive: false });
+canvas.addEventListener("pointerup", () => {
+  dragging = false;
+});
+canvas.addEventListener("pointercancel", () => {
+  dragging = false;
+});
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+    const view = state.view[activeSlot];
+    const factor = event.deltaY < 0 ? 1.08 : 0.93;
+    view.zoom = Math.max(1, Math.min(3, view.zoom * factor));
+    redraw();
+  },
+  { passive: false },
+);
 
-// Export: download the canvas as a PNG at the chosen post size.
-document.getElementById('export').addEventListener('click', () => {
-  status.textContent = 'Exporting…';
+// Export.
+exportBtn.addEventListener("click", () => {
+  setStatus("Exporting…");
   canvas.toBlob((blob) => {
     if (!blob) {
-      status.textContent = 'Export failed — please try again.';
+      setStatus("Export failed — please try again.");
       return;
     }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    window.__exportedBytes = blob.size;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
     a.download = `vice-cover-${state.size}.png`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    status.textContent = `Saved vice-cover-${state.size}.png (${Math.round(blob.size / 1024)} KB).`;
-    window.__exportedBytes = blob.size;
-  }, 'image/png');
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const kb = Math.round(blob.size / 1024);
+    setStatus(`Saved vice-cover-${state.size}.png (${kb} KB).`);
+  }, "image/png");
 });
 
-// Screenshot scenes (?shot=...) or the plain editor with samples preloaded.
-const query = new URLSearchParams(location.search);
-const shot = query.get('shot');
+// Startup: shot mode or plain editor.
+const params = new URLSearchParams(window.location.search);
+const shot = params.get("shot");
 if (shot) {
-  runShot(shot, query, async (sample, text, sub, layout, size) => {
+  runShot(shot, params, async (sample, text, sub, layout, size) => {
     state.caption = text;
     state.subcaption = sub;
     state.layout = layout;
     state.size = size;
-    state.photos[0] = await loadImage(`samples/${sample}.jpg`);
-    state.photos[1] = state.photos[0];
-    state.photos[2] = state.photos[0];
     captionInput.value = text;
     subInput.value = sub;
-    markActive(layoutButtons, layout);
-    markActive(sizeButtons, size);
+    const [w, h] = SIZES[size] || SIZES["1080x1080"];
+    sizeNote.textContent = `Exporting ${w} × ${h} px.`;
+    markActive("layout", layout);
+    markActive("size", size);
+    for (let slot = 0; slot < 3; slot++) {
+      await loadSample(sample, slot);
+    }
     redraw();
   });
 } else {
-  loadSample('pier', 0);
+  loadSample("pier", 0);
   redraw();
 }
